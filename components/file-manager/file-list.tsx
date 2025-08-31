@@ -75,7 +75,7 @@ export function FileList({ files, onFileDelete, onFileDownload }: FileListProps)
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">{formatFileSize(file.size)}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{formatDate(file.modifiedAt)}</TableCell>
-              <TableCell>
+              {/* <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
@@ -93,7 +93,7 @@ export function FileList({ files, onFileDelete, onFileDownload }: FileListProps)
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </TableCell>
+              </TableCell> */}
             </TableRow>
           ))}
         </TableBody>
