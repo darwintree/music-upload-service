@@ -7,12 +7,24 @@ import { Header } from "@/components/layout/header"
 import { FileUploadZone } from "@/components/upload/file-upload-zone"
 import { FileManager } from "@/components/file-manager/file-manager"
 import { UploadQueueManager } from "@/components/queue/upload-queue-manager"
+import { FolderTree } from "@/components/file-manager/folder-tree"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Upload, FolderOpen, Clock } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Upload, FolderOpen, Clock, AlertCircle } from "lucide-react"
 
 function Dashboard() {
-  const [selectedFolder, setSelectedFolder] = useState("/")
+  const [selectedFolder, setSelectedFolder] = useState<string>("")
+  const [folders, setFolders] = useState([])
+  const [isLoadingFolders, setIsLoadingFolders] = useState(false)
+
+  const handleFolderCreate = async (parentPath: string, name: string) => {
+    console.log("Creating folder:", name, "in", parentPath)
+  }
+
+  const handleFolderDelete = async (path: string) => {
+    console.log("Deleting folder:", path)
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -47,29 +59,60 @@ function Dashboard() {
                   <CardDescription>拖拽 .m4a 格式的音乐文件到此区域，或点击选择文件</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <FileUploadZone selectedFolder={selectedFolder} />
+                  {!selectedFolder ? (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>请先在右侧选择目标文件夹，然后才能上传文件。</AlertDescription>
+                    </Alert>
+                  ) : (
+                    <FileUploadZone selectedFolder={selectedFolder} />
+                  )}
                 </CardContent>
               </Card>
 
-              {/* 上传设置 */}
+              {/* 选择目标文件夹 */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">上传设置</CardTitle>
+                  <CardTitle className="text-base">选择目标文件夹</CardTitle>
+                  <CardDescription>选择文件上传的目标位置</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium">目标文件夹</label>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {selectedFolder === "/" ? "根目录" : selectedFolder}
-                    </p>
+                  {selectedFolder && (
+                    <div>
+                      <label className="text-sm font-medium">当前选择</label>
+                      <p className="text-sm text-primary font-medium mt-1">
+                        {selectedFolder === "/" ? "根目录" : selectedFolder}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 文件夹树组件 */}
+                  <div className="border rounded-md p-2 max-h-64 overflow-y-auto">
+                    {isLoadingFolders ? (
+                      <div className="text-center py-4">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mx-auto mb-2"></div>
+                        <p className="text-xs text-muted-foreground">加载文件夹...</p>
+                      </div>
+                    ) : (
+                      <FolderTree
+                        folders={folders}
+                        selectedFolder={selectedFolder}
+                        onFolderSelect={setSelectedFolder}
+                        onFolderCreate={handleFolderCreate}
+                        onFolderDelete={handleFolderDelete}
+                      />
+                    )}
                   </div>
-                  <div>
-                    <label className="text-sm font-medium">支持格式</label>
-                    <p className="text-sm text-muted-foreground mt-1">.m4a</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">最大文件大小</label>
-                    <p className="text-sm text-muted-foreground mt-1">100 MB</p>
+
+                  <div className="pt-2 border-t">
+                    <div className="space-y-2 text-xs text-muted-foreground">
+                      <div>
+                        <span className="font-medium">支持格式:</span> .m4a
+                      </div>
+                      <div>
+                        <span className="font-medium">最大文件大小:</span> 100 MB
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
