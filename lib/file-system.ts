@@ -148,8 +148,8 @@ export async function saveUploadedFile(file: File, targetPath: string): Promise<
     await fs.mkdir(path.dirname(fullPath), { recursive: true })
 
     // 将文件保存到磁盘
-    const buffer = Buffer.from(await file.arrayBuffer())
-    await fs.writeFile(fullPath, buffer)
+    const arrayBuffer = await file.arrayBuffer()
+    await fs.writeFile(fullPath, new Uint8Array(arrayBuffer))
 
     return true
   } catch (error) {

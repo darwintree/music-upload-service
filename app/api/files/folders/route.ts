@@ -8,10 +8,8 @@ export async function GET(request: NextRequest) {
 
     // 验证认证
     const authHeader = request.headers.get("authorization")
-    console.log("[v0] Auth header:", authHeader ? "present" : "missing")
 
-    const token = extractTokenFromHeader(authHeader)
-    console.log("[v0] Extracted token:", token ? "present" : "missing")
+    const token = extractTokenFromHeader(authHeader)                     
 
     if (!token || !validateToken(token)) {
       console.log("[v0] Token validation failed")

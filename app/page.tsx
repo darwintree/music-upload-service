@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { LoginForm } from "@/components/auth/login-form"
 import { Header } from "@/components/layout/header"
@@ -17,14 +17,84 @@ function Dashboard() {
   const [selectedFolder, setSelectedFolder] = useState<string>("")
   const [folders, setFolders] = useState([])
   const [isLoadingFolders, setIsLoadingFolders] = useState(false)
+  const { getAuthHeaders, isAuthenticated } = useAuth()
+
+  const loadFolders = async () => {
+    if (!isAuthenticated) {
+      console.log("[v0] Skipping folder load - user not authenticated")
+      return
+    }
+
+    setIsLoadingFolders(true)
+    try {
+      const response = await fetch("/api/files/folders", {
+        headers: getAuthHeaders(),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setFolders(data.folders)
+      } else {
+        throw new Error("Failed to load folders")
+      }
+    } catch (err) {
+      console.error("Failed to load folders:", err)
+    } finally {
+      setIsLoadingFolders(false)
+    }
+  }
 
   const handleFolderCreate = async (parentPath: string, name: string) => {
-    console.log("Creating folder:", name, "in", parentPath)
+    if (!isAuthenticated) return
+
+    try {
+      const response = await fetch("/api/files/create-folder", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ parentPath, name }),
+      })
+
+      if (response.ok) {
+        await loadFolders()
+      } else {
+        throw new Error("Failed to create folder")
+      }
+    } catch (err) {
+      console.error("Failed to create folder:", err)
+    }
   }
 
   const handleFolderDelete = async (path: string) => {
-    console.log("Deleting folder:", path)
+    if (!isAuthenticated) return
+
+    try {
+      const response = await fetch("/api/files/delete-folder", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ path }),
+      })
+
+      if (response.ok) {
+        await loadFolders()
+      } else {
+        throw new Error("Failed to delete folder")
+      }
+    } catch (err) {
+      console.error("Failed to delete folder:", err)
+    }
   }
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadFolders()
+    }
+  }, [isAuthenticated])
 
   return (
     <div className="min-h-screen bg-background">
@@ -32,7 +102,7 @@ function Dashboard() {
 
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="upload" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="upload" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
               文件上传
@@ -41,10 +111,10 @@ function Dashboard() {
               <FolderOpen className="h-4 w-4" />
               文件管理
             </TabsTrigger>
-            <TabsTrigger value="queue" className="flex items-center gap-2">
+            {/* <TabsTrigger value="queue" className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
               上传队列
-            </TabsTrigger>
+            </TabsTrigger> */}
           </TabsList>
 
           <TabsContent value="upload" className="space-y-6">

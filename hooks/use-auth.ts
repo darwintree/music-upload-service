@@ -31,8 +31,7 @@ export function useAuth() {
 
   const getAuthHeaders = () => {
     const currentToken = localStorage.getItem("music-upload-token")
-    console.log("[v0] Getting auth headers, token:", currentToken ? "present" : "missing")
-    if (!currentToken) return {}
+    if (!currentToken) throw new Error("No token found")
     return {
       Authorization: `Bearer ${currentToken}`,
     }
