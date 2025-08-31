@@ -6,7 +6,7 @@ import { LoginForm } from "@/components/auth/login-form"
 import { Header } from "@/components/layout/header"
 import { FileUploadZone } from "@/components/upload/file-upload-zone"
 import { FileManager } from "@/components/file-manager/file-manager"
-import { UploadQueueManager } from "@/components/queue/upload-queue-manager"
+// import { UploadQueueManager } from "@/components/queue/upload-queue-manager"
 import { FolderTree } from "@/components/file-manager/folder-tree"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -192,10 +192,10 @@ function Dashboard() {
           <TabsContent value="manage" className="space-y-6">
             <FileManager selectedFolder={selectedFolder} onFolderSelect={setSelectedFolder} />
           </TabsContent>
-
+{/* 
           <TabsContent value="queue" className="space-y-6">
             <UploadQueueManager />
-          </TabsContent>
+          </TabsContent> */}
         </Tabs>
       </main>
     </div>

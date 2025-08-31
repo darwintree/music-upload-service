@@ -4,11 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Music, LogOut, User, Wifi, WifiOff } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useUploadQueue } from "@/hooks/use-upload-queue"
 
 export function Header() {
   const { logout, token } = useAuth()
-  const { stats, error } = useUploadQueue()
 
   const handleLogout = () => {
     logout()
@@ -28,7 +26,7 @@ export function Header() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          {/* <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
               {stats.processing > 0 && (
                 <Badge variant="default" className="gap-1">
@@ -66,7 +64,7 @@ export function Header() {
               <LogOut className="h-4 w-4" />
               退出登录
             </Button>
-          </div>
+          </div> */}
         </div>
       </div>
     </header>

@@ -8,7 +8,6 @@ import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, X, FileAudio, AlertCircle, CheckCircle } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { useUploadQueue } from "@/hooks/use-upload-queue"
 
 interface UploadFile {
   id: string
@@ -29,7 +28,6 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { getAuthHeaders } = useAuth()
-  const { addTask, updateTask } = useUploadQueue()
 
   const validateFile = (file: File): string | null => {
     // 检查文件格式
@@ -62,7 +60,6 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
             progress: 0,
             status: "pending",
           })
-          addTask(file, selectedFolder || "/")
         }
       })
 
@@ -76,7 +73,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         setUploadFiles((prev) => [...prev, ...newFiles])
       }
     },
-    [selectedFolder, addTask],
+    [selectedFolder],
   )
 
   const uploadFile = async (uploadFile: UploadFile) => {
