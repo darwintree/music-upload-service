@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateToken, extractTokenFromHeader } from "@/lib/auth"
 import { getFolderStructure } from "@/lib/file-system"
+import { env } from "@/lib/env"
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,8 +19,8 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Token validation successful")
 
-    const uploadDir = process.env.UPLOAD_DIR
-    console.log("[v0] UPLOAD_DIR environment variable:", uploadDir || "not set, using default ./uploads")
+    const uploadDir = env.get('UPLOAD_DIR')
+    console.log("[v0] UPLOAD_DIR environment variable:", uploadDir)
 
     // 获取文件夹结构
     const folders = await getFolderStructure()

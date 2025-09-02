@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-import { DEFAULT_TEST_TOKEN } from "@/lib/auth"
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -72,9 +71,6 @@ export function LoginForm({ onLogin }: LoginFormProps) {
           <CardDescription className="text-pretty">
             请输入您的访问令牌以继续使用服务
             <br />
-            <span className="text-xs text-muted-foreground mt-2 block">
-              测试用默认令牌: <code className="bg-muted px-1 rounded text-xs">{DEFAULT_TEST_TOKEN}</code>
-            </span>
           </CardDescription>
         </CardHeader>
         <CardContent>

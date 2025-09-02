@@ -1,9 +1,10 @@
 import { promises as fs } from "fs"
 import path from "path"
 import type { FileItem, FolderStructure } from "@/types/file-system"
+import { env } from "@/lib/env"
 
 // 工作目录配置
-const WORK_DIR = process.env.UPLOAD_DIR || "./uploads"
+const WORK_DIR = env.get('UPLOAD_DIR')
 
 export async function ensureWorkDir() {
   try {
