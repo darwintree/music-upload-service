@@ -6,27 +6,52 @@ import { env } from "@/lib/env"
 // 工作目录配置
 const WORK_DIR = env.get('UPLOAD_DIR')
 
+// 路径安全管理工具
+function sanitizePath(inputPath: string): string {
+  if (!inputPath) return "/"
+  
+  // 移除首尾空格和斜杠
+  let sanitized = inputPath.trim().replace(/^\/+|\/+$/g, "")
+  
+  // 防止路径遍历攻击
+  if (sanitized.includes("..") || sanitized.includes("\\") || sanitized.includes("\0")) {
+    throw new Error("Invalid path: contains dangerous characters")
+  }
+  
+  // 确保路径以 / 开头
+  return "/" + sanitized
+}
+
+function resolveAbsolutePath(relativePath: string): string {
+  const sanitized = sanitizePath(relativePath)
+  return path.join(WORK_DIR, sanitized)
+}
+
+function isPathSafe(testPath: string): boolean {
+  try {
+    const resolved = path.resolve(testPath)
+    const workDirResolved = path.resolve(WORK_DIR)
+    return resolved.startsWith(workDirResolved)
+  } catch {
+    return false
+  }
+}
+
 export async function ensureWorkDir() {
   try {
-    console.log("[v0] Checking work directory:", WORK_DIR)
     await fs.access(WORK_DIR)
-    console.log("[v0] Work directory exists")
   } catch {
-    console.log("[v0] Creating work directory:", WORK_DIR)
     await fs.mkdir(WORK_DIR, { recursive: true })
-    console.log("[v0] Work directory created")
   }
 }
 
 export async function listFiles(folderPath: string): Promise<FileItem[]> {
-  console.log("[v0] Listing files in folder:", folderPath)
   await ensureWorkDir()
-  const fullPath = path.join(WORK_DIR, folderPath)
-  console.log("[v0] Full path:", fullPath)
+  const sanitizedPath = sanitizePath(folderPath)
+  const fullPath = resolveAbsolutePath(sanitizedPath)
 
   try {
     const entries = await fs.readdir(fullPath, { withFileTypes: true })
-    console.log("[v0] Directory entries found:", entries.length)
     const files: FileItem[] = []
 
     for (const entry of entries) {
@@ -35,21 +60,20 @@ export async function listFiles(folderPath: string): Promise<FileItem[]> {
         const stats = await fs.stat(filePath)
 
         files.push({
-          id: Buffer.from(filePath).toString("base64"),
+          id: Buffer.from(sanitizedPath + "/" + entry.name).toString("base64"),
           name: entry.name,
           type: "file",
           size: stats.size,
           createdAt: stats.birthtime.toISOString(),
           modifiedAt: stats.mtime.toISOString(),
-          path: folderPath,
+          path: sanitizedPath,
         })
       }
     }
 
-    console.log("[v0] M4A files found:", files.length)
     return files
   } catch (error) {
-    console.error("[v0] Error listing files:", error)
+    console.error("Error listing files:", error)
     return []
   }
 }
@@ -72,7 +96,7 @@ export async function getFolderStructure(): Promise<FolderStructure[]> {
       } else if (entry.isFile() && entry.name.endsWith(".m4a")) {
         const stats = await fs.stat(fullPath)
         files.push({
-          id: Buffer.from(fullPath).toString("base64"),
+          id: Buffer.from(entryRelativePath).toString("base64"),
           name: entry.name,
           type: "file",
           size: stats.size,
@@ -84,7 +108,7 @@ export async function getFolderStructure(): Promise<FolderStructure[]> {
     }
 
     return {
-      id: Buffer.from(dirPath).toString("base64"),
+      id: Buffer.from(relativePath).toString("base64"),
       name: path.basename(dirPath) || "我的音乐",
       path: relativePath || "/",
       children,
@@ -105,11 +129,17 @@ export async function createFolder(parentPath: string, folderName: string): Prom
   await ensureWorkDir()
 
   // 验证文件夹名称
-  if (!folderName || folderName.includes("..") || folderName.includes("/") || folderName.includes("\\")) {
+  if (!folderName || folderName.includes("..") || folderName.includes("/") || folderName.includes("\\") || folderName.includes("\0")) {
     return false
   }
 
-  const fullPath = path.join(WORK_DIR, parentPath, folderName)
+  const sanitizedParentPath = sanitizePath(parentPath)
+  const fullPath = resolveAbsolutePath(sanitizedParentPath + "/" + folderName)
+
+  // 安全检查
+  if (!isPathSafe(fullPath)) {
+    return false
+  }
 
   try {
     await fs.mkdir(fullPath, { recursive: true })
@@ -128,7 +158,13 @@ export async function deleteFolder(folderPath: string): Promise<boolean> {
     return false
   }
 
-  const fullPath = path.join(WORK_DIR, folderPath)
+  const sanitizedPath = sanitizePath(folderPath)
+  const fullPath = resolveAbsolutePath(sanitizedPath)
+
+  // 安全检查
+  if (!isPathSafe(fullPath)) {
+    return false
+  }
 
   try {
     await fs.rmdir(fullPath, { recursive: true })
@@ -142,7 +178,13 @@ export async function deleteFolder(folderPath: string): Promise<boolean> {
 export async function saveUploadedFile(file: File, targetPath: string): Promise<boolean> {
   await ensureWorkDir()
 
-  const fullPath = path.join(WORK_DIR, targetPath)
+  const sanitizedPath = sanitizePath(targetPath)
+  const fullPath = resolveAbsolutePath(sanitizedPath)
+
+  // 安全检查
+  if (!isPathSafe(fullPath)) {
+    return false
+  }
 
   try {
     // 确保目标目录存在
