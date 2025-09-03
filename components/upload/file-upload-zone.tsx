@@ -53,6 +53,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
     (files: FileList) => {
       const newFiles: UploadFile[] = []
       const errors: string[] = []
+      const hasLosslessFilesInBatch = Array.from(files).some(file => isLosslessFile(file))
 
       Array.from(files).forEach((file) => {
         const validationError = validateFile(file)
@@ -77,9 +78,17 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
 
       if (newFiles.length > 0) {
         setUploadFiles((prev) => [...prev, ...newFiles])
+        
+        // Auto-load FFmpeg if there are lossless files and it's not already loaded/loading
+        if (hasLosslessFilesInBatch && !isLoaded && !isLoading) {
+          loadFFmpeg().catch((error) => {
+            console.error("Auto-load FFmpeg failed:", error)
+            setError("自动加载转码库失败，请手动点击加载转码库按钮")
+          })
+        }
       }
     },
-    [selectedFolder],
+    [selectedFolder, isLosslessFile, isLoaded, isLoading, loadFFmpeg],
   )
 
   const uploadFile = async (uploadFile: UploadFile) => {
@@ -241,6 +250,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
 
   const hasLosslessFiles = uploadFiles.some(file => isLosslessFile(file.file) && file.status === "pending")
   const needsFFmpeg = hasLosslessFiles && !isLoaded && !isLoading
+  const isAutoLoading = hasLosslessFiles && !isLoaded && isLoading
 
   const handleLoadFFmpeg = async () => {
     try {
@@ -347,12 +357,26 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
       {uploadFiles.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium">上传文件 ({uploadFiles.length})</h3>
+            <div className="flex items-center gap-4">
+              <h3 className="text-lg font-medium">上传文件 ({uploadFiles.length})</h3>
+              {isAutoLoading && (
+                <div className="flex items-center gap-1 text-sm text-blue-600">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>正在准备转码库...</span>
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
-              {needsFFmpeg && (
-                <Button onClick={handleLoadFFmpeg} variant="outline" size="sm" className="gap-2">
-                  <Loader2 className="h-4 w-4" />
-                  {isLoading ? "加载中..." : "加载转码库"}
+              {(needsFFmpeg || isAutoLoading) && (
+                <Button 
+                  onClick={handleLoadFFmpeg} 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2"
+                  disabled={isAutoLoading}
+                >
+                  <Loader2 className={`h-4 w-4 ${isAutoLoading ? 'animate-spin' : ''}`} />
+                  {isAutoLoading ? "加载转码库中..." : "加载转码库"}
                 </Button>
               )}
               {uploadFiles.some((f) => f.status === "pending") && (
@@ -360,7 +384,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
                   onClick={startUpload} 
                   size="sm" 
                   className="gap-2"
-                  disabled={needsFFmpeg || isLoading}
+                  disabled={needsFFmpeg || isLoading || isAutoLoading}
                 >
                   <Upload className="h-4 w-4" />
                   开始上传
