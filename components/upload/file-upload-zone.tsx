@@ -30,7 +30,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { getAuthHeaders } = useAuth()
-  const { transcodeLosslessToAac, isLosslessFile } = useFFmpegTranscode()
+  const { transcodeLosslessToAac, isLosslessFile, loadFFmpeg, isLoading, isLoaded } = useFFmpegTranscode()
 
   const validateFile = (file: File): string | null => {
     // 检查文件格式
@@ -214,6 +214,13 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
 
   const startUpload = async () => {
     const pendingFiles = uploadFiles.filter((f) => f.status === "pending")
+    
+    // Check if FFmpeg needs to be loaded for lossless files
+    const hasPendingLosslessFiles = pendingFiles.some(file => isLosslessFile(file.file))
+    if (hasPendingLosslessFiles && !isLoaded) {
+      setError("请先加载转码库")
+      return
+    }
 
     for (const file of pendingFiles) {
       await uploadFile(file)
@@ -230,6 +237,17 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
 
   const clearCompleted = () => {
     setUploadFiles((prev) => prev.filter((f) => f.status === "pending" || f.status === "uploading"))
+  }
+
+  const hasLosslessFiles = uploadFiles.some(file => isLosslessFile(file.file) && file.status === "pending")
+  const needsFFmpeg = hasLosslessFiles && !isLoaded && !isLoading
+
+  const handleLoadFFmpeg = async () => {
+    try {
+      await loadFFmpeg()
+    } catch (error) {
+      setError("加载转码库失败")
+    }
   }
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -331,8 +349,19 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium">上传文件 ({uploadFiles.length})</h3>
             <div className="flex gap-2">
+              {needsFFmpeg && (
+                <Button onClick={handleLoadFFmpeg} variant="outline" size="sm" className="gap-2">
+                  <Loader2 className="h-4 w-4" />
+                  {isLoading ? "加载中..." : "加载转码库"}
+                </Button>
+              )}
               {uploadFiles.some((f) => f.status === "pending") && (
-                <Button onClick={startUpload} size="sm" className="gap-2">
+                <Button 
+                  onClick={startUpload} 
+                  size="sm" 
+                  className="gap-2"
+                  disabled={needsFFmpeg || isLoading}
+                >
                   <Upload className="h-4 w-4" />
                   开始上传
                 </Button>

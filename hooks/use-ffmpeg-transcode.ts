@@ -20,6 +20,7 @@ export function useFFmpegTranscode() {
   const ffmpegRef = useRef<FFmpeg | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isTranscoding, setIsTranscoding] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(false)
 
   const loadFFmpeg = useCallback(async (): Promise<FFmpeg | null> => {
     if (ffmpegRef.current) return ffmpegRef.current
@@ -35,9 +36,11 @@ export function useFFmpegTranscode() {
       })
       
       ffmpegRef.current = ffmpeg
+      setIsLoaded(true)
       return ffmpeg
     } catch (error) {
       console.error("Failed to load FFmpeg:", error)
+      setIsLoaded(false)
       return null
     } finally {
       setIsLoading(false)
@@ -125,6 +128,7 @@ export function useFFmpegTranscode() {
     isLosslessFile,
     getTranscodeFileName,
     isLoading,
-    isTranscoding
+    isTranscoding,
+    isLoaded
   }
 }
