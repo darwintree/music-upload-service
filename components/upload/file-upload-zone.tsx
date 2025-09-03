@@ -30,12 +30,15 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { getAuthHeaders } = useAuth()
-  const { transcodeFlacToAac, isFlacFile } = useFFmpegTranscode()
+  const { transcodeLosslessToAac, isLosslessFile } = useFFmpegTranscode()
 
   const validateFile = (file: File): string | null => {
     // 检查文件格式
-    if (!file.name.toLowerCase().endsWith(".m4a") && !file.name.toLowerCase().endsWith(".flac")) {
-      return "只支持 .m4a 和 .flac 格式的音频文件"
+    const isM4a = file.name.toLowerCase().endsWith(".m4a")
+    const isLossless = isLosslessFile(file)
+    
+    if (!isM4a && !isLossless) {
+      return "只支持 .m4a 和无损音频格式文件 (FLAC, WAV, AIFF, etc.)"
     }
 
     // 检查文件大小 (100MB)
@@ -82,12 +85,12 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const uploadFile = async (uploadFile: UploadFile) => {
     let fileToUpload = uploadFile.file
 
-    // Transcode FLAC files to AAC
-    if (isFlacFile(uploadFile.file)) {
+    // Transcode lossless files to AAC
+    if (isLosslessFile(uploadFile.file)) {
       try {
         setUploadFiles((prev) => prev.map((f) => (f.id === uploadFile.id ? { ...f, status: "transcoding", transcodingProgress: 0 } : f)))
 
-        const result = await transcodeFlacToAac(uploadFile.file, {
+        const result = await transcodeLosslessToAac(uploadFile.file, {
           onProgress: (progress, _time) => {
             setUploadFiles((prev) => prev.map((f) => 
               f.id === uploadFile.id ? { ...f, transcodingProgress: progress } : f
@@ -298,8 +301,8 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         onDrop={handleDrop}
       >
         <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <p className="text-lg font-medium text-foreground mb-2">拖拽 .m4a 或 .flac 文件到此处上传</p>
-        <p className="text-sm text-muted-foreground mb-4">支持批量上传，单个文件最大 100MB，FLAC文件将自动转码为AAC</p>
+        <p className="text-lg font-medium text-foreground mb-2">拖拽音频文件到此处上传</p>
+        <p className="text-sm text-muted-foreground mb-4">支持 .m4a 和无损音频格式 (FLAC, WAV, AIFF等)，单个文件最大 100MB，无损文件将自动转码为AAC</p>
         <Button onClick={handleFileSelect} className="gap-2">
           <Upload className="h-4 w-4" />
           选择文件
@@ -307,7 +310,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         <input
           ref={fileInputRef}
           type="file"
-          accept=".m4a,.flac"
+          accept=".m4a,.flac,.wav,.aiff,.aif,.wv,.ape,.tta,.dsf,.dff"
           multiple
           className="hidden"
           onChange={handleFileInputChange}
@@ -349,7 +352,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">
-                    {uploadFile.status === "transcoding" && isFlacFile(uploadFile.file) 
+                    {uploadFile.status === "transcoding" && isLosslessFile(uploadFile.file) 
                       ? `${uploadFile.file.name} (转码中...)` 
                       : uploadFile.file.name}
                   </p>

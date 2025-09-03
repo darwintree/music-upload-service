@@ -13,6 +13,9 @@ interface TranscodeResult {
   error?: string
 }
 
+// Supported lossless audio formats
+const LOSSLESS_FORMATS = ['.flac', '.wav', '.aiff', '.aif', '.wv', '.ape', '.tta', '.dsf', '.dff']
+
 export function useFFmpegTranscode() {
   const ffmpegRef = useRef<FFmpeg | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -41,8 +44,8 @@ export function useFFmpegTranscode() {
     }
   }, [])
 
-  const transcodeFlacToAac = useCallback(async (
-    flacFile: File, 
+  const transcodeLosslessToAac = useCallback(async (
+    losslessFile: File, 
     options: TranscodeOptions = {}
   ): Promise<TranscodeResult> => {
     const { onProgress, onError } = options
@@ -57,11 +60,12 @@ export function useFFmpegTranscode() {
         return { success: false, error }
       }
 
-      const inputFileName = `input_${Date.now()}.flac`
+      const inputExtension = '.' + losslessFile.name.split('.').pop()?.toLowerCase()
+      const inputFileName = `input_${Date.now()}${inputExtension}`
       const outputFileName = `output_${Date.now()}.m4a`
 
       // Write input file to FFmpeg's virtual file system
-      await ffmpeg.writeFile(inputFileName, await fetchFile(flacFile))
+      await ffmpeg.writeFile(inputFileName, await fetchFile(losslessFile))
 
       // Set up progress listener
       ffmpeg.on('progress', ({ progress, time }) => {
@@ -86,7 +90,7 @@ export function useFFmpegTranscode() {
       
       // Convert to File object
       const outputBlob = new Blob([outputData], { type: 'audio/mp4' })
-      const outputFile = new File([outputBlob], flacFile.name.replace('.flac', '.m4a'), {
+      const outputFile = new File([outputBlob], losslessFile.name.replace(/\.[^/.]+$/, '.m4a'), {
         type: 'audio/mp4'
       })
 
@@ -105,14 +109,21 @@ export function useFFmpegTranscode() {
     }
   }, [loadFFmpeg])
 
-  const isFlacFile = useCallback((file: File): boolean => {
-    return file.name.toLowerCase().endsWith('.flac')
+  const isLosslessFile = useCallback((file: File): boolean => {
+    const extension = '.' + file.name.split('.').pop()?.toLowerCase()
+    return LOSSLESS_FORMATS.includes(extension)
+  }, [])
+
+  const getTranscodeFileName = useCallback((originalFile: File): string => {
+    const baseName = originalFile.name.replace(/\.[^/.]+$/, '') // Remove extension
+    return `${baseName}.m4a`
   }, [])
 
   return {
     loadFFmpeg,
-    transcodeFlacToAac,
-    isFlacFile,
+    transcodeLosslessToAac,
+    isLosslessFile,
+    getTranscodeFileName,
     isLoading,
     isTranscoding
   }
