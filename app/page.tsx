@@ -126,7 +126,7 @@ function Dashboard() {
                     <Upload className="h-5 w-5 text-primary" />
                     文件上传
                   </CardTitle>
-                  <CardDescription>拖拽 .m4a 格式的音乐文件到此区域，或点击选择文件</CardDescription>
+                  <CardDescription>拖拽音乐文件到此区域，或点击选择文件</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {!selectedFolder ? (

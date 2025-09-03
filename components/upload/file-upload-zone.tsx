@@ -302,7 +302,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
       >
         <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <p className="text-lg font-medium text-foreground mb-2">拖拽音频文件到此处上传</p>
-        <p className="text-sm text-muted-foreground mb-4">支持 .m4a 和无损音频格式 (FLAC, WAV, AIFF等)，单个文件最大 100MB，无损文件将自动转码为AAC</p>
+        <p className="text-sm text-muted-foreground mb-4">支持 .m4a 和无损音频格式 (FLAC, WAV, AIFF等)，单个文件最大 100MB，无损文件将自动转码为 AAC(256k)</p>
         <Button onClick={handleFileSelect} className="gap-2">
           <Upload className="h-4 w-4" />
           选择文件
