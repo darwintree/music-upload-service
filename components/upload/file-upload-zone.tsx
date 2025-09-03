@@ -8,8 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Upload, X, FileAudio, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
-import { FFmpeg } from "@ffmpeg/ffmpeg"
-import { fetchFile, toBlobURL } from "@ffmpeg/util"
+import { useFFmpegTranscode } from "@/hooks/use-ffmpeg-transcode"
 
 interface UploadFile {
   id: string
@@ -31,8 +30,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { getAuthHeaders } = useAuth()
-  const ffmpegRef = useRef<FFmpeg | null>(null)
-  const [isFFmpegLoading, setIsFFmpegLoading] = useState(false)
+  const { transcodeFlacToAac, isFlacFile, isLoading: isFFmpegLoading } = useFFmpegTranscode()
 
   const validateFile = (file: File): string | null => {
     // 检查文件格式
@@ -46,73 +44,6 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
     }
 
     return null
-  }
-
-  const loadFFmpeg = async () => {
-    if (ffmpegRef.current) return ffmpegRef.current
-
-    setIsFFmpegLoading(true)
-    try {
-      const ffmpeg = new FFmpeg()
-      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd"
-      
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      })
-      
-      ffmpegRef.current = ffmpeg
-      return ffmpeg
-    } catch (error) {
-      console.error("Failed to load FFmpeg:", error)
-      setError("无法加载音频转码器")
-      return null
-    } finally {
-      setIsFFmpegLoading(false)
-    }
-  }
-
-  const transcodeFlacToAac = async (flacFile: File): Promise<File> => {
-    const ffmpeg = await loadFFmpeg()
-    if (!ffmpeg) {
-      throw new Error("Failed to load FFmpeg")
-    }
-
-    const inputFileName = `input_${Date.now()}.flac`
-    const outputFileName = `output_${Date.now()}.m4a`
-
-    try {
-      // Write input file to FFmpeg's virtual file system
-      await ffmpeg.writeFile(inputFileName, await fetchFile(flacFile))
-
-      // Transcode FLAC to AAC
-      await ffmpeg.exec([
-        '-i', inputFileName,
-        '-c:a', 'aac',
-        '-b:a', '256k',
-        '-map', '0',
-        '-c:v', 'copy',
-        outputFileName
-      ])
-
-      // Read the transcoded file
-      const outputData = await ffmpeg.readFile(outputFileName)
-      
-      // Convert to File object
-      const outputBlob = new Blob([outputData], { type: 'audio/mp4' })
-      const outputFile = new File([outputBlob], flacFile.name.replace('.flac', '.m4a'), {
-        type: 'audio/mp4'
-      })
-
-      // Clean up
-      await ffmpeg.deleteFile(inputFileName)
-      await ffmpeg.deleteFile(outputFileName)
-
-      return outputFile
-    } catch (error) {
-      console.error("Transcoding error:", error)
-      throw new Error("音频转码失败")
-    }
   }
 
   const handleFiles = useCallback(
@@ -152,25 +83,38 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
     let fileToUpload = uploadFile.file
 
     // Transcode FLAC files to AAC
-    if (uploadFile.file.name.toLowerCase().endsWith('.flac')) {
+    if (isFlacFile(uploadFile.file)) {
       try {
         setUploadFiles((prev) => prev.map((f) => (f.id === uploadFile.id ? { ...f, status: "transcoding", transcodingProgress: 0 } : f)))
 
-        // Simulate transcoding progress
-        const progressInterval = setInterval(() => {
-          setUploadFiles((prev) => prev.map((f) => {
-            if (f.id === uploadFile.id && f.status === "transcoding") {
-              const newProgress = Math.min((f.transcodingProgress || 0) + 10, 90)
-              return { ...f, transcodingProgress: newProgress }
-            }
-            return f
-          }))
-        }, 200)
+        const result = await transcodeFlacToAac(uploadFile.file, {
+          onProgress: (progress) => {
+            setUploadFiles((prev) => prev.map((f) => 
+              f.id === uploadFile.id ? { ...f, transcodingProgress: progress } : f
+            ))
+          },
+          onError: (error) => {
+            setError(error)
+          }
+        })
 
-        fileToUpload = await transcodeFlacToAac(uploadFile.file)
-        
-        clearInterval(progressInterval)
-        setUploadFiles((prev) => prev.map((f) => (f.id === uploadFile.id ? { ...f, transcodingProgress: 100 } : f)))
+        if (result.success && result.outputFile) {
+          fileToUpload = result.outputFile
+          setUploadFiles((prev) => prev.map((f) => (f.id === uploadFile.id ? { ...f, transcodingProgress: 100 } : f)))
+        } else {
+          setUploadFiles((prev) =>
+            prev.map((f) =>
+              f.id === uploadFile.id
+                ? {
+                    ...f,
+                    status: "error",
+                    error: result.error || "转码失败",
+                  }
+                : f,
+            ),
+          )
+          return
+        }
       } catch (error) {
         setUploadFiles((prev) =>
           prev.map((f) =>
@@ -405,7 +349,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">
-                    {uploadFile.status === "transcoding" && uploadFile.file.name.toLowerCase().endsWith('.flac') 
+                    {uploadFile.status === "transcoding" && isFlacFile(uploadFile.file) 
                       ? `${uploadFile.file.name} (转码中...)` 
                       : uploadFile.file.name}
                   </p>
