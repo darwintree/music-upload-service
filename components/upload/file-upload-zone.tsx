@@ -6,15 +6,18 @@ import { useState, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, X, FileAudio, AlertCircle, CheckCircle } from "lucide-react"
+import { Upload, X, FileAudio, AlertCircle, CheckCircle, Loader2 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
+import { FFmpeg } from "@ffmpeg/ffmpeg"
+import { fetchFile, toBlobURL } from "@ffmpeg/util"
 
 interface UploadFile {
   id: string
   file: File
   progress: number
-  status: "pending" | "uploading" | "success" | "error"
+  status: "pending" | "transcoding" | "uploading" | "success" | "error"
   error?: string
+  transcodingProgress?: number
 }
 
 interface FileUploadZoneProps {
@@ -28,11 +31,13 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { getAuthHeaders } = useAuth()
+  const ffmpegRef = useRef<FFmpeg | null>(null)
+  const [isFFmpegLoading, setIsFFmpegLoading] = useState(false)
 
   const validateFile = (file: File): string | null => {
     // 检查文件格式
-    if (!file.name.toLowerCase().endsWith(".m4a")) {
-      return "只支持 .m4a 格式的音频文件"
+    if (!file.name.toLowerCase().endsWith(".m4a") && !file.name.toLowerCase().endsWith(".flac")) {
+      return "只支持 .m4a 和 .flac 格式的音频文件"
     }
 
     // 检查文件大小 (100MB)
@@ -41,6 +46,73 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
     }
 
     return null
+  }
+
+  const loadFFmpeg = async () => {
+    if (ffmpegRef.current) return ffmpegRef.current
+
+    setIsFFmpegLoading(true)
+    try {
+      const ffmpeg = new FFmpeg()
+      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd"
+      
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      })
+      
+      ffmpegRef.current = ffmpeg
+      return ffmpeg
+    } catch (error) {
+      console.error("Failed to load FFmpeg:", error)
+      setError("无法加载音频转码器")
+      return null
+    } finally {
+      setIsFFmpegLoading(false)
+    }
+  }
+
+  const transcodeFlacToAac = async (flacFile: File): Promise<File> => {
+    const ffmpeg = await loadFFmpeg()
+    if (!ffmpeg) {
+      throw new Error("Failed to load FFmpeg")
+    }
+
+    const inputFileName = `input_${Date.now()}.flac`
+    const outputFileName = `output_${Date.now()}.m4a`
+
+    try {
+      // Write input file to FFmpeg's virtual file system
+      await ffmpeg.writeFile(inputFileName, await fetchFile(flacFile))
+
+      // Transcode FLAC to AAC
+      await ffmpeg.exec([
+        '-i', inputFileName,
+        '-c:a', 'aac',
+        '-b:a', '256k',
+        '-map', '0',
+        '-c:v', 'copy',
+        outputFileName
+      ])
+
+      // Read the transcoded file
+      const outputData = await ffmpeg.readFile(outputFileName)
+      
+      // Convert to File object
+      const outputBlob = new Blob([outputData], { type: 'audio/mp4' })
+      const outputFile = new File([outputBlob], flacFile.name.replace('.flac', '.m4a'), {
+        type: 'audio/mp4'
+      })
+
+      // Clean up
+      await ffmpeg.deleteFile(inputFileName)
+      await ffmpeg.deleteFile(outputFileName)
+
+      return outputFile
+    } catch (error) {
+      console.error("Transcoding error:", error)
+      throw new Error("音频转码失败")
+    }
   }
 
   const handleFiles = useCallback(
@@ -77,8 +149,46 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   )
 
   const uploadFile = async (uploadFile: UploadFile) => {
+    let fileToUpload = uploadFile.file
+
+    // Transcode FLAC files to AAC
+    if (uploadFile.file.name.toLowerCase().endsWith('.flac')) {
+      try {
+        setUploadFiles((prev) => prev.map((f) => (f.id === uploadFile.id ? { ...f, status: "transcoding", transcodingProgress: 0 } : f)))
+
+        // Simulate transcoding progress
+        const progressInterval = setInterval(() => {
+          setUploadFiles((prev) => prev.map((f) => {
+            if (f.id === uploadFile.id && f.status === "transcoding") {
+              const newProgress = Math.min((f.transcodingProgress || 0) + 10, 90)
+              return { ...f, transcodingProgress: newProgress }
+            }
+            return f
+          }))
+        }, 200)
+
+        fileToUpload = await transcodeFlacToAac(uploadFile.file)
+        
+        clearInterval(progressInterval)
+        setUploadFiles((prev) => prev.map((f) => (f.id === uploadFile.id ? { ...f, transcodingProgress: 100 } : f)))
+      } catch (error) {
+        setUploadFiles((prev) =>
+          prev.map((f) =>
+            f.id === uploadFile.id
+              ? {
+                  ...f,
+                  status: "error",
+                  error: "转码失败",
+                }
+              : f,
+          ),
+        )
+        return
+      }
+    }
+
     const formData = new FormData()
-    formData.append("file", uploadFile.file)
+    formData.append("file", fileToUpload)
     if (selectedFolder) {
       formData.append("folder", selectedFolder)
     }
@@ -217,6 +327,8 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         return <AlertCircle className="h-4 w-4 text-destructive" />
       case "uploading":
         return <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      case "transcoding":
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
       default:
         return <FileAudio className="h-4 w-4 text-muted-foreground" />
     }
@@ -242,8 +354,8 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         onDrop={handleDrop}
       >
         <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <p className="text-lg font-medium text-foreground mb-2">拖拽 .m4a 文件到此处上传</p>
-        <p className="text-sm text-muted-foreground mb-4">支持批量上传，单个文件最大 100MB</p>
+        <p className="text-lg font-medium text-foreground mb-2">拖拽 .m4a 或 .flac 文件到此处上传</p>
+        <p className="text-sm text-muted-foreground mb-4">支持批量上传，单个文件最大 100MB，FLAC文件将自动转码为AAC</p>
         <Button onClick={handleFileSelect} className="gap-2">
           <Upload className="h-4 w-4" />
           选择文件
@@ -251,7 +363,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         <input
           ref={fileInputRef}
           type="file"
-          accept=".m4a"
+          accept=".m4a,.flac"
           multiple
           className="hidden"
           onChange={handleFileInputChange}
@@ -292,10 +404,20 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
                 {getStatusIcon(uploadFile.status)}
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{uploadFile.file.name}</p>
+                  <p className="text-sm font-medium truncate">
+                    {uploadFile.status === "transcoding" && uploadFile.file.name.toLowerCase().endsWith('.flac') 
+                      ? `${uploadFile.file.name} (转码中...)` 
+                      : uploadFile.file.name}
+                  </p>
                   <p className="text-xs text-muted-foreground">{formatFileSize(uploadFile.file.size)}</p>
 
                   {uploadFile.status === "uploading" && <Progress value={uploadFile.progress} className="mt-2 h-1" />}
+                  {uploadFile.status === "transcoding" && (
+                    <div className="mt-2">
+                      <Progress value={uploadFile.transcodingProgress || 0} className="h-1" />
+                      <p className="text-xs text-blue-600 mt-1">转码进度: {uploadFile.transcodingProgress || 0}%</p>
+                    </div>
+                  )}
 
                   {uploadFile.error && <p className="text-xs text-destructive mt-1">{uploadFile.error}</p>}
                 </div>
@@ -304,7 +426,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
                   variant="ghost"
                   size="sm"
                   onClick={() => removeFile(uploadFile.id)}
-                  disabled={uploadFile.status === "uploading"}
+                  disabled={uploadFile.status === "uploading" || uploadFile.status === "transcoding"}
                 >
                   <X className="h-4 w-4" />
                 </Button>
