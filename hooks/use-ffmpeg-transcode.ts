@@ -3,7 +3,7 @@ import { FFmpeg } from '@ffmpeg/ffmpeg'
 import { fetchFile, toBlobURL } from '@ffmpeg/util'
 
 interface TranscodeOptions {
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number, time?: number) => void
   onError?: (error: string) => void
 }
 
@@ -63,10 +63,11 @@ export function useFFmpegTranscode() {
       // Write input file to FFmpeg's virtual file system
       await ffmpeg.writeFile(inputFileName, await fetchFile(flacFile))
 
-      // Simulate progress updates during transcoding
-      const progressInterval = setInterval(() => {
-        onProgress?.(Math.min(((Math.random() * 20) + 10), 90))
-      }, 500)
+      // Set up progress listener
+      ffmpeg.on('progress', ({ progress, time }) => {
+        const progressPercent = Math.round(progress * 100)
+        onProgress?.(progressPercent, time)
+      })
 
       // Transcode FLAC to AAC
       await ffmpeg.exec([
@@ -78,8 +79,7 @@ export function useFFmpegTranscode() {
         outputFileName
       ])
 
-      clearInterval(progressInterval)
-      onProgress?.(100)
+      onProgress?.(100, 0)
 
       // Read the transcoded file
       const outputData = await ffmpeg.readFile(outputFileName)

@@ -30,7 +30,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { getAuthHeaders } = useAuth()
-  const { transcodeFlacToAac, isFlacFile, isLoading: isFFmpegLoading } = useFFmpegTranscode()
+  const { transcodeFlacToAac, isFlacFile } = useFFmpegTranscode()
 
   const validateFile = (file: File): string | null => {
     // 检查文件格式
@@ -88,7 +88,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         setUploadFiles((prev) => prev.map((f) => (f.id === uploadFile.id ? { ...f, status: "transcoding", transcodingProgress: 0 } : f)))
 
         const result = await transcodeFlacToAac(uploadFile.file, {
-          onProgress: (progress) => {
+          onProgress: (progress, _time) => {
             setUploadFiles((prev) => prev.map((f) => 
               f.id === uploadFile.id ? { ...f, transcodingProgress: progress } : f
             ))
