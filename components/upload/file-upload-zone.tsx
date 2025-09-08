@@ -28,6 +28,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
   const [error, setError] = useState("")
+  const [forceTranscode, setForceTranscode] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { getAuthHeaders } = useAuth()
   const { transcodeLosslessToAac, isLosslessFile, loadFFmpeg, isLoading, isLoaded } = useFFmpegTranscode()
@@ -49,11 +50,17 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
     return null
   }
 
+  const isM4aFile = (file: File): boolean => file.name.toLowerCase().endsWith(".m4a")
+
+  const shouldTranscodeFile = useCallback((file: File): boolean => {
+    return isLosslessFile(file) || (forceTranscode && isM4aFile(file))
+  }, [forceTranscode, isLosslessFile])
+
   const handleFiles = useCallback(
     (files: FileList) => {
       const newFiles: UploadFile[] = []
       const errors: string[] = []
-      const hasLosslessFilesInBatch = Array.from(files).some(file => isLosslessFile(file))
+      const hasTranscodeFilesInBatch = Array.from(files).some(file => shouldTranscodeFile(file))
 
       Array.from(files).forEach((file) => {
         const validationError = validateFile(file)
@@ -80,7 +87,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         setUploadFiles((prev) => [...prev, ...newFiles])
         
         // Auto-load FFmpeg if there are lossless files and it's not already loaded/loading
-        if (hasLosslessFilesInBatch && !isLoaded && !isLoading) {
+        if (hasTranscodeFilesInBatch && !isLoaded && !isLoading) {
           loadFFmpeg().catch((error) => {
             console.error("Auto-load FFmpeg failed:", error)
             setError("自动加载转码库失败，请手动点击加载转码库按钮")
@@ -88,14 +95,14 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         }
       }
     },
-    [selectedFolder, isLosslessFile, isLoaded, isLoading, loadFFmpeg],
+    [selectedFolder, shouldTranscodeFile, isLoaded, isLoading, loadFFmpeg],
   )
 
   const uploadFile = async (uploadFile: UploadFile) => {
     let fileToUpload = uploadFile.file
 
-    // Transcode lossless files to AAC
-    if (isLosslessFile(uploadFile.file)) {
+    // Transcode if needed (lossless or forced for m4a)
+    if (shouldTranscodeFile(uploadFile.file)) {
       try {
         setUploadFiles((prev) => prev.map((f) => (f.id === uploadFile.id ? { ...f, status: "transcoding", transcodingProgress: 0 } : f)))
 
@@ -224,9 +231,9 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const startUpload = async () => {
     const pendingFiles = uploadFiles.filter((f) => f.status === "pending")
     
-    // Check if FFmpeg needs to be loaded for lossless files
-    const hasPendingLosslessFiles = pendingFiles.some(file => isLosslessFile(file.file))
-    if (hasPendingLosslessFiles && !isLoaded) {
+    // Check if FFmpeg needs to be loaded for files requiring transcode
+    const hasPendingTranscodeFiles = pendingFiles.some(file => shouldTranscodeFile(file.file))
+    if (hasPendingTranscodeFiles && !isLoaded) {
       setError("请先加载转码库")
       return
     }
@@ -248,9 +255,9 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
     setUploadFiles((prev) => prev.filter((f) => f.status === "pending" || f.status === "uploading"))
   }
 
-  const hasLosslessFiles = uploadFiles.some(file => isLosslessFile(file.file) && file.status === "pending")
-  const needsFFmpeg = hasLosslessFiles && !isLoaded && !isLoading
-  const isAutoLoading = hasLosslessFiles && !isLoaded && isLoading
+  const hasTranscodeFiles = uploadFiles.some(file => shouldTranscodeFile(file.file) && file.status === "pending")
+  const needsFFmpeg = hasTranscodeFiles && !isLoaded && !isLoading
+  const isAutoLoading = hasTranscodeFiles && !isLoaded && isLoading
 
   const handleLoadFFmpeg = async () => {
     try {
@@ -330,7 +337,19 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
       >
         <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <p className="text-lg font-medium text-foreground mb-2">拖拽音频文件到此处上传</p>
-        <p className="text-sm text-muted-foreground mb-4">支持 .m4a 和无损音频格式 (FLAC, WAV, AIFF等)，单个文件最大 100MB，无损文件将自动转码为 AAC(256k)</p>
+        <p className="text-sm text-muted-foreground mb-4">支持 .m4a 和无损音频格式 (FLAC, WAV, AIFF等)，单个文件最大 100MB；无损文件将自动转码为 AAC(256k)，可开启“强制转码”以对 .m4a 也进行转码</p>
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <input
+            id="force-transcode"
+            type="checkbox"
+            className="h-4 w-4"
+            checked={forceTranscode}
+            onChange={(e) => setForceTranscode(e.target.checked)}
+          />
+          <label htmlFor="force-transcode" className="text-sm text-foreground select-none">
+            强制转码（包含 .m4a）
+          </label>
+        </div>
         <Button onClick={handleFileSelect} className="gap-2">
           <Upload className="h-4 w-4" />
           选择文件
@@ -405,7 +424,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">
-                    {uploadFile.status === "transcoding" && isLosslessFile(uploadFile.file) 
+                    {uploadFile.status === "transcoding" && shouldTranscodeFile(uploadFile.file) 
                       ? `${uploadFile.file.name} (转码中...)` 
                       : uploadFile.file.name}
                   </p>
