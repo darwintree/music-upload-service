@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { FileUploadZone } from "@/components/upload/file-upload-zone"
 import { FolderTree } from "./folder-tree"
 import { FileList } from "./file-list"
-import { Folder, FolderPlus, RefreshCw, AlertCircle } from "lucide-react"
+import { Folder, FolderPlus, RefreshCw, AlertCircle, Upload } from "lucide-react"
 import type { FolderStructure, FileItem } from "@/types/file-system"
 import { useAuth } from "@/hooks/use-auth"
 import { usePolling } from "@/hooks/use-polling"
@@ -328,7 +329,7 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
               <div className="text-sm text-muted-foreground">{files.length} 个文件</div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 space-y-6">
             {isLoading ? (
               <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
@@ -337,6 +338,22 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
             ) : (
               <FileList files={files} onFileDelete={handleFileDelete} onFileDownload={handleFileDownload} />
             )}
+
+            <div className="border-t pt-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Upload className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-medium">文件上传</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">拖拽音乐文件到此区域，或点击选择文件</p>
+              {!selectedFolder ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>请先在左侧选择目标文件夹，然后才能上传文件。</AlertDescription>
+                </Alert>
+              ) : (
+                <FileUploadZone selectedFolder={selectedFolder} />
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

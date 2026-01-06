@@ -101,7 +101,7 @@ function Dashboard() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
-        <Tabs defaultValue="upload" className="space-y-6">
+        <Tabs defaultValue="manage" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="upload" className="flex items-center gap-2">
               <Upload className="h-4 w-4" />
