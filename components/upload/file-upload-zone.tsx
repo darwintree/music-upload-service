@@ -17,6 +17,7 @@ interface UploadFile {
   status: "pending" | "transcoding" | "uploading" | "success" | "error"
   error?: string
   transcodingProgress?: number
+  targetFolder: string
 }
 
 interface FileUploadZoneProps {
@@ -43,6 +44,29 @@ interface FileSystemDirectoryReader {
   readEntries: (success: (entries: FileSystemEntry[]) => void, error?: (err: DOMException) => void) => void
 }
 
+interface DroppedFile {
+  file: File
+  relativeDir: string
+}
+
+const getRelativeDir = (fullPath: string) => {
+  const normalized = fullPath.replace(/\\/g, "/")
+  const parts = normalized.split("/").filter(Boolean)
+  if (parts.length <= 1) {
+    return ""
+  }
+  return parts.slice(0, -1).join("/")
+}
+
+const joinFolderPaths = (base: string, relativeDir: string) => {
+  const normalizedBase = base.endsWith("/") ? base.slice(0, -1) : base
+  const normalizedRelative = relativeDir.replace(/^\/+|\/+$/g, "")
+  if (!normalizedRelative) {
+    return normalizedBase
+  }
+  return `${normalizedBase}/${normalizedRelative}`
+}
+
 const readAllDirectoryEntries = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> => {
   const entries: FileSystemEntry[] = []
   return new Promise((resolve, reject) => {
@@ -63,12 +87,12 @@ const readAllDirectoryEntries = (reader: FileSystemDirectoryReader): Promise<Fil
   })
 }
 
-const traverseFileTree = async (entry: FileSystemEntry, files: File[]) => {
+const traverseFileTree = async (entry: FileSystemEntry, files: DroppedFile[]) => {
   if (entry.isFile) {
     await new Promise<void>((resolve, reject) => {
       ;(entry as FileSystemFileEntry).file(
         (file) => {
-          files.push(file)
+          files.push({ file, relativeDir: getRelativeDir(entry.fullPath) })
           resolve()
         },
         (err) => reject(err),
@@ -86,13 +110,13 @@ const traverseFileTree = async (entry: FileSystemEntry, files: File[]) => {
   }
 }
 
-const getFilesFromDragEvent = async (dataTransfer: DataTransfer): Promise<File[]> => {
+const getFilesFromDragEvent = async (dataTransfer: DataTransfer): Promise<DroppedFile[]> => {
   const items = dataTransfer.items
   if (!items || items.length === 0) {
-    return Array.from(dataTransfer.files)
+    return Array.from(dataTransfer.files).map((file) => ({ file, relativeDir: "" }))
   }
 
-  const files: File[] = []
+  const files: DroppedFile[] = []
   const promises: Promise<void>[] = []
 
   for (const item of Array.from(items)) {
@@ -109,14 +133,14 @@ const getFilesFromDragEvent = async (dataTransfer: DataTransfer): Promise<File[]
 
     const file = item.getAsFile()
     if (file) {
-      files.push(file)
+      files.push({ file, relativeDir: "" })
     }
   }
 
   await Promise.all(promises)
 
   if (files.length === 0) {
-    return Array.from(dataTransfer.files)
+    return Array.from(dataTransfer.files).map((file) => ({ file, relativeDir: "" }))
   }
 
   return files
@@ -155,22 +179,29 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   }, [forceTranscode, isLosslessFile])
 
   const handleFiles = useCallback(
-    (files: File[]) => {
+    (files: DroppedFile[]) => {
+      if (!selectedFolder) {
+        setError("请先选择目标文件夹")
+        return
+      }
+
       const newFiles: UploadFile[] = []
       const errors: string[] = []
-      const hasTranscodeFilesInBatch = files.some(file => shouldTranscodeFile(file))
+      const hasTranscodeFilesInBatch = files.some(item => shouldTranscodeFile(item.file))
 
-      files.forEach((file) => {
-        const validationError = validateFile(file)
+      files.forEach((item) => {
+        const validationError = validateFile(item.file)
         if (validationError) {
-          errors.push(`${file.name}: ${validationError}`)
+          errors.push(`${item.file.name}: ${validationError}`)
         } else {
           const fileId = Math.random().toString(36).substr(2, 9)
+          const targetFolder = joinFolderPaths(selectedFolder, item.relativeDir)
           newFiles.push({
             id: fileId,
-            file,
+            file: item.file,
             progress: 0,
             status: "pending",
+            targetFolder,
           })
         }
       })
@@ -193,7 +224,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         }
       }
     },
-    [shouldTranscodeFile, isLoaded, isLoading, loadFFmpeg],
+    [selectedFolder, shouldTranscodeFile, isLoaded, isLoading, loadFFmpeg],
   )
 
   const uploadFile = async (uploadFile: UploadFile) => {
@@ -250,9 +281,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
 
     const formData = new FormData()
     formData.append("file", fileToUpload)
-    if (selectedFolder) {
-      formData.append("folder", selectedFolder)
-    }
+    formData.append("folder", uploadFile.targetFolder)
 
     try {
       setUploadFiles((prev) => prev.map((f) => (f.id === uploadFile.id ? { ...f, status: "uploading" } : f)))
@@ -395,7 +424,12 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files) {
-      handleFiles(Array.from(files))
+      const mappedFiles = Array.from(files).map((file) => {
+        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || ""
+        const relativeDir = relativePath ? getRelativeDir(relativePath) : ""
+        return { file, relativeDir }
+      })
+      handleFiles(mappedFiles)
     }
   }
 
@@ -436,6 +470,9 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <p className="text-lg font-medium text-foreground mb-2">拖拽音频文件或文件夹到此处上传</p>
         <p className="text-sm text-muted-foreground mb-4">支持 .m4a 和无损音频格式 (FLAC, WAV, AIFF等)，单个文件最大 100MB；无损文件将自动转码为 AAC(256k)，可开启“强制转码”以对 .m4a 也进行转码</p>
+        {!selectedFolder && (
+          <p className="text-sm text-destructive mb-4">请先选择目标文件夹后再上传</p>
+        )}
         <div className="flex items-center justify-center gap-2 mb-4">
           <input
             id="force-transcode"
@@ -527,6 +564,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
                       : uploadFile.file.name}
                   </p>
                   <p className="text-xs text-muted-foreground">{formatFileSize(uploadFile.file.size)}</p>
+                  <p className="text-xs text-muted-foreground">目标文件夹: {uploadFile.targetFolder}</p>
 
                   {uploadFile.status === "uploading" && <Progress value={uploadFile.progress} className="mt-2 h-1" />}
                   {uploadFile.status === "transcoding" && (
