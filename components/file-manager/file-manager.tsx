@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FileUploadZone } from "@/components/upload/file-upload-zone"
 import { FolderTree } from "./folder-tree"
 import { FileList } from "./file-list"
@@ -309,41 +310,58 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
           </CardContent>
         </Card>
 
-        {/* 文件列表 */}
-        <Card className="md:col-span-3">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">文件列表 {selectedFolder !== "/" && `- ${selectedFolder}`}</CardTitle>
-              <div className="text-sm text-muted-foreground">{files.length} 个文件</div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0 space-y-6">
-            {isLoading ? (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">加载中...</p>
-              </div>
-            ) : (
-              <FileList files={files} onFileDelete={handleFileDelete} onFileDownload={handleFileDownload} />
-            )}
+        {/* 文件列表 / 上传切换 */}
+        <div className="md:col-span-3 space-y-4">
+          <Tabs defaultValue="upload" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="list">文件列表</TabsTrigger>
+              <TabsTrigger value="upload">文件上传</TabsTrigger>
+            </TabsList>
 
-            <div className="border-t pt-6">
-              <div className="flex items-center gap-2 mb-2">
-                <Upload className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-medium">文件上传</h3>
-              </div>
-              <p className="text-xs text-muted-foreground mb-4">拖拽音乐文件到此区域，或点击选择文件</p>
-              {!selectedFolder ? (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>请先在左侧选择目标文件夹，然后才能上传文件。</AlertDescription>
-                </Alert>
-              ) : (
-                <FileUploadZone selectedFolder={selectedFolder} />
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            <TabsContent value="list">
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">文件列表 {selectedFolder !== "/" && `- ${selectedFolder}`}</CardTitle>
+                    <div className="text-sm text-muted-foreground">{files.length} 个文件</div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {isLoading ? (
+                    <div className="text-center py-12">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-muted-foreground">加载中...</p>
+                    </div>
+                  ) : (
+                    <FileList files={files} onFileDelete={handleFileDelete} onFileDownload={handleFileDownload} />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="upload">
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Upload className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-base">文件上传</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <p className="text-xs text-muted-foreground mb-4">拖拽音乐文件到此区域，或点击选择文件</p>
+                  {!selectedFolder ? (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>请先在左侧选择目标文件夹，然后才能上传文件。</AlertDescription>
+                    </Alert>
+                  ) : (
+                    <FileUploadZone selectedFolder={selectedFolder} />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   )
