@@ -24,6 +24,104 @@ interface FileUploadZoneProps {
   selectedFolder?: string
 }
 
+interface FileSystemEntry {
+  isFile: boolean
+  isDirectory: boolean
+  name: string
+  fullPath: string
+}
+
+interface FileSystemFileEntry extends FileSystemEntry {
+  file: (success: (file: File) => void, error?: (err: DOMException) => void) => void
+}
+
+interface FileSystemDirectoryEntry extends FileSystemEntry {
+  createReader: () => FileSystemDirectoryReader
+}
+
+interface FileSystemDirectoryReader {
+  readEntries: (success: (entries: FileSystemEntry[]) => void, error?: (err: DOMException) => void) => void
+}
+
+const readAllDirectoryEntries = (reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> => {
+  const entries: FileSystemEntry[] = []
+  return new Promise((resolve, reject) => {
+    const readBatch = () => {
+      reader.readEntries(
+        (batch) => {
+          if (batch.length === 0) {
+            resolve(entries)
+            return
+          }
+          entries.push(...batch)
+          readBatch()
+        },
+        (err) => reject(err),
+      )
+    }
+    readBatch()
+  })
+}
+
+const traverseFileTree = async (entry: FileSystemEntry, files: File[]) => {
+  if (entry.isFile) {
+    await new Promise<void>((resolve, reject) => {
+      ;(entry as FileSystemFileEntry).file(
+        (file) => {
+          files.push(file)
+          resolve()
+        },
+        (err) => reject(err),
+      )
+    })
+    return
+  }
+
+  if (entry.isDirectory) {
+    const reader = (entry as FileSystemDirectoryEntry).createReader()
+    const entries = await readAllDirectoryEntries(reader)
+    for (const child of entries) {
+      await traverseFileTree(child, files)
+    }
+  }
+}
+
+const getFilesFromDragEvent = async (dataTransfer: DataTransfer): Promise<File[]> => {
+  const items = dataTransfer.items
+  if (!items || items.length === 0) {
+    return Array.from(dataTransfer.files)
+  }
+
+  const files: File[] = []
+  const promises: Promise<void>[] = []
+
+  for (const item of Array.from(items)) {
+    if (item.kind !== "file") {
+      continue
+    }
+
+    // Prefer directory traversal when available (non-standard but supported in Chromium/WebKit).
+    const entry = (item as DataTransferItem & { webkitGetAsEntry?: () => FileSystemEntry | null }).webkitGetAsEntry?.()
+    if (entry) {
+      promises.push(traverseFileTree(entry, files))
+      continue
+    }
+
+    const file = item.getAsFile()
+    if (file) {
+      files.push(file)
+    }
+  }
+
+  await Promise.all(promises)
+
+  if (files.length === 0) {
+    return Array.from(dataTransfer.files)
+  }
+
+  return files
+}
+
 export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZoneProps) {
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
@@ -57,12 +155,12 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   }, [forceTranscode, isLosslessFile])
 
   const handleFiles = useCallback(
-    (files: FileList) => {
+    (files: File[]) => {
       const newFiles: UploadFile[] = []
       const errors: string[] = []
-      const hasTranscodeFilesInBatch = Array.from(files).some(file => shouldTranscodeFile(file))
+      const hasTranscodeFilesInBatch = files.some(file => shouldTranscodeFile(file))
 
-      Array.from(files).forEach((file) => {
+      files.forEach((file) => {
         const validationError = validateFile(file)
         if (validationError) {
           errors.push(`${file.name}: ${validationError}`)
@@ -95,7 +193,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         }
       }
     },
-    [selectedFolder, shouldTranscodeFile, isLoaded, isLoading, loadFFmpeg],
+    [shouldTranscodeFile, isLoaded, isLoading, loadFFmpeg],
   )
 
   const uploadFile = async (uploadFile: UploadFile) => {
@@ -278,11 +376,11 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   }, [])
 
   const handleDrop = useCallback(
-    (e: React.DragEvent) => {
+    async (e: React.DragEvent) => {
       e.preventDefault()
       setIsDragOver(false)
 
-      const files = e.dataTransfer.files
+      const files = await getFilesFromDragEvent(e.dataTransfer)
       if (files.length > 0) {
         handleFiles(files)
       }
@@ -297,7 +395,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files) {
-      handleFiles(files)
+      handleFiles(Array.from(files))
     }
   }
 
@@ -336,7 +434,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
         onDrop={handleDrop}
       >
         <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-        <p className="text-lg font-medium text-foreground mb-2">拖拽音频文件到此处上传</p>
+        <p className="text-lg font-medium text-foreground mb-2">拖拽音频文件或文件夹到此处上传</p>
         <p className="text-sm text-muted-foreground mb-4">支持 .m4a 和无损音频格式 (FLAC, WAV, AIFF等)，单个文件最大 100MB；无损文件将自动转码为 AAC(256k)，可开启“强制转码”以对 .m4a 也进行转码</p>
         <div className="flex items-center justify-center gap-2 mb-4">
           <input
