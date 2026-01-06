@@ -1,15 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Folder, FolderOpen, FolderPlus, MoreHorizontal, Trash2, ChevronRight, ChevronDown } from "lucide-react"
+import { Folder, FolderOpen, Trash2, ChevronRight, ChevronDown } from "lucide-react"
 import type { FolderStructure } from "@/types/file-system"
 
 interface FolderTreeProps {
   folders: FolderStructure[]
   selectedFolder?: string
+  createTargetPath?: string | null
+  createRequestId?: number
   onFolderSelect: (path: string) => void
   onFolderCreate: (parentPath: string, name: string) => void
   onFolderDelete: (path: string) => void
@@ -19,6 +20,8 @@ interface FolderNodeProps {
   folder: FolderStructure
   level: number
   selectedFolder?: string
+  createTargetPath?: string | null
+  createRequestId?: number
   onFolderSelect: (path: string) => void
   onFolderCreate: (parentPath: string, name: string) => void
   onFolderDelete: (path: string) => void
@@ -28,6 +31,8 @@ function FolderNode({
   folder,
   level,
   selectedFolder,
+  createTargetPath,
+  createRequestId,
   onFolderSelect,
   onFolderCreate,
   onFolderDelete,
@@ -35,6 +40,7 @@ function FolderNode({
   const [isExpanded, setIsExpanded] = useState(level === 0)
   const [isCreating, setIsCreating] = useState(false)
   const [newFolderName, setNewFolderName] = useState("")
+  const createRowRef = useRef<HTMLDivElement | null>(null)
 
   const handleCreateFolder = () => {
     if (newFolderName.trim()) {
@@ -53,6 +59,20 @@ function FolderNode({
 
   const isSelected = selectedFolder === folder.path
   const hasChildren = folder.children.length > 0
+
+  useEffect(() => {
+    if (!createRequestId) return
+    if (createTargetPath === folder.path) {
+      setIsCreating(true)
+      setIsExpanded(true)
+    }
+  }, [createRequestId, createTargetPath, folder.path])
+
+  useEffect(() => {
+    if (isCreating) {
+      createRowRef.current?.scrollIntoView({ block: "nearest" })
+    }
+  }, [isCreating])
 
   return (
     <div>
@@ -75,29 +95,27 @@ function FolderNode({
           <span className="text-sm font-medium">{folder.name}</span>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100">
-              <MoreHorizontal className="h-3 w-3" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setIsCreating(true)}>
-              <FolderPlus className="h-4 w-4 mr-2" />
-              新建文件夹
-            </DropdownMenuItem>
-            {folder.path !== "/" && (
-              <DropdownMenuItem onClick={handleDeleteFolder} className="text-destructive">
-                <Trash2 className="h-4 w-4 mr-2" />
-                删除文件夹
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {folder.path !== "/" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-6 w-6 p-0 text-destructive ${
+              isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}
+            onClick={handleDeleteFolder}
+            aria-label="删除文件夹"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        )}
       </div>
 
       {isCreating && (
-        <div className="flex items-center gap-2 p-2" style={{ paddingLeft: `${(level + 1) * 16 + 8}px` }}>
+        <div
+          ref={createRowRef}
+          className="flex items-center gap-2 p-2"
+          style={{ paddingLeft: `${(level + 1) * 16 + 8}px` }}
+        >
           <Folder className="h-4 w-4 text-muted-foreground" />
           <Input
             value={newFolderName}
@@ -112,6 +130,7 @@ function FolderNode({
                 setNewFolderName("")
               }
             }}
+            onFocus={(e) => e.currentTarget.select()}
             autoFocus
           />
           <Button size="sm" onClick={handleCreateFolder} disabled={!newFolderName.trim()}>
@@ -138,6 +157,8 @@ function FolderNode({
               folder={child}
               level={level + 1}
               selectedFolder={selectedFolder}
+              createTargetPath={createTargetPath}
+              createRequestId={createRequestId}
               onFolderSelect={onFolderSelect}
               onFolderCreate={onFolderCreate}
               onFolderDelete={onFolderDelete}
@@ -152,6 +173,8 @@ function FolderNode({
 export function FolderTree({
   folders,
   selectedFolder,
+  createTargetPath,
+  createRequestId,
   onFolderSelect,
   onFolderCreate,
   onFolderDelete,
@@ -164,6 +187,8 @@ export function FolderTree({
           folder={folder}
           level={0}
           selectedFolder={selectedFolder}
+          createTargetPath={createTargetPath}
+          createRequestId={createRequestId}
           onFolderSelect={onFolderSelect}
           onFolderCreate={onFolderCreate}
           onFolderDelete={onFolderDelete}

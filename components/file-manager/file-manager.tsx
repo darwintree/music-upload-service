@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FolderTree } from "./folder-tree"
 import { FileList } from "./file-list"
-import { Folder, RefreshCw, AlertCircle } from "lucide-react"
+import { Folder, FolderPlus, RefreshCw, AlertCircle } from "lucide-react"
 import type { FolderStructure, FileItem } from "@/types/file-system"
 import { useAuth } from "@/hooks/use-auth"
 import { usePolling } from "@/hooks/use-polling"
@@ -21,6 +21,8 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
   const [files, setFiles] = useState<FileItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [createRequestId, setCreateRequestId] = useState(0)
+  const [createTargetPath, setCreateTargetPath] = useState<string | null>(null)
   const { getAuthHeaders, isAuthenticated, isLoading: authLoading } = useAuth()
 
   const loadFolders = async () => {
@@ -170,6 +172,9 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
   const handleFolderCreate = async (parentPath: string, name: string) => {
     if (!isAuthenticated) return
 
+    const normalizedParent = parentPath === "/" ? "" : parentPath
+    const newFolderPath = `${normalizedParent}/${name}`
+
     try {
       const response = await fetch("/api/files/create-folder", {
         method: "POST",
@@ -183,6 +188,7 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
       if (response.ok) {
         // 重新加载文件夹结构
         await loadFolders()
+        handleFolderSelect(newFolderPath)
       } else {
         throw new Error("Failed to create folder")
       }
@@ -250,6 +256,11 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
     }
   }
 
+  const handleCreateFolderRequest = () => {
+    setCreateTargetPath(selectedFolder)
+    setCreateRequestId((id) => id + 1)
+  }
+
   if (authLoading) {
     return (
       <div className="text-center py-12">
@@ -286,15 +297,22 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
                 <Folder className="h-4 w-4" />
                 文件夹
               </CardTitle>
-              <Button variant="ghost" size="sm" onClick={handleRefresh}>
-                <RefreshCw className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={handleCreateFolderRequest} aria-label="新建文件夹">
+                  <FolderPlus className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleRefresh} aria-label="刷新">
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
             <FolderTree
               folders={folders}
               selectedFolder={selectedFolder}
+              createTargetPath={createTargetPath}
+              createRequestId={createRequestId}
               onFolderSelect={handleFolderSelect}
               onFolderCreate={handleFolderCreate}
               onFolderDelete={handleFolderDelete}
