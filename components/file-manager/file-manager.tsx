@@ -10,7 +10,6 @@ import { FileList } from "./file-list"
 import { Folder, FolderPlus, RefreshCw, AlertCircle, Upload } from "lucide-react"
 import type { FolderStructure, FileItem } from "@/types/file-system"
 import { useAuth } from "@/hooks/use-auth"
-import { usePolling } from "@/hooks/use-polling"
 
 interface FileManagerProps {
   onFolderSelect?: (path: string) => void
@@ -142,17 +141,6 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
       setIsLoading(false)
     }
   }
-
-  usePolling(
-    () => {
-      loadFiles(selectedFolder)
-    },
-    {
-      interval: 10000, // 每10秒刷新一次文件列表
-      enabled: isAuthenticated,
-      immediate: false,
-    },
-  )
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
