@@ -339,7 +339,7 @@ export function FileManager({ onFolderSelect, selectedFolder = "/" }: FileManage
               </Card>
             </TabsContent>
 
-            <TabsContent value="upload">
+            <TabsContent value="upload" forceMount>
               <Card>
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-2">
