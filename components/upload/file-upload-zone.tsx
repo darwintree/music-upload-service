@@ -154,6 +154,9 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { getAuthHeaders } = useAuth()
   const { transcodeLosslessToAac, isLosslessFile, loadFFmpeg, isLoading, isLoaded } = useFFmpegTranscode()
+  const maxFileSizeMbRaw = Number.parseInt(process.env.NEXT_PUBLIC_MAX_FILE_SIZE_MB ?? "100", 10)
+  const maxFileSizeMb = Number.isFinite(maxFileSizeMbRaw) && maxFileSizeMbRaw > 0 ? maxFileSizeMbRaw : 100
+  const maxFileSizeBytes = maxFileSizeMb * 1024 * 1024
 
   const validateFile = (file: File): string | null => {
     // 检查文件格式
@@ -164,9 +167,9 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
       return "只支持 .m4a 和无损音频格式文件 (FLAC, WAV, AIFF, etc.)"
     }
 
-    // 检查文件大小 (100MB)
-    if (file.size > 100 * 1024 * 1024) {
-      return "文件大小不能超过 100MB"
+    // 检查文件大小
+    if (file.size > maxFileSizeBytes) {
+      return `文件大小不能超过 ${maxFileSizeMb}MB`
     }
 
     return null
@@ -469,7 +472,7 @@ export function FileUploadZone({ onUploadComplete, selectedFolder }: FileUploadZ
       >
         <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
         <p className="text-lg font-medium text-foreground mb-2">拖拽音频文件或文件夹到此处上传</p>
-        <p className="text-sm text-muted-foreground mb-4">支持 .m4a 和无损音频格式 (FLAC, WAV, AIFF等)，单个文件最大 100MB；无损文件将自动转码为 AAC(256k)，可开启“强制转码”以对 .m4a 也进行转码</p>
+        <p className="text-sm text-muted-foreground mb-4">支持 .m4a 和无损音频格式 (FLAC, WAV, AIFF等)，单个文件最大 {maxFileSizeMb}MB；无损文件将自动转码为 AAC(256k)，可开启“强制转码”以对 .m4a 也进行转码</p>
         {!selectedFolder && (
           <p className="text-sm text-destructive mb-4">请先选择目标文件夹后再上传</p>
         )}

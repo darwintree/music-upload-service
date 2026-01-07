@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { validateToken, extractTokenFromHeader } from "@/lib/auth"
+import { env } from "@/lib/env"
 import { saveUploadedFile } from "@/lib/file-system"
 import path from "path"
 
@@ -27,9 +28,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Only .m4a files are allowed (FLAC files will be transcoded to .m4a in browser)" }, { status: 400 })
     }
 
-    // 验证文件大小 (100MB)
-    if (file.size > 100 * 1024 * 1024) {
-      return NextResponse.json({ error: "File size exceeds 100MB limit" }, { status: 400 })
+    const maxFileSizeMb = env.get("MAX_FILE_SIZE_MB")
+    const maxFileSizeBytes = maxFileSizeMb * 1024 * 1024
+
+    // 验证文件大小
+    if (file.size > maxFileSizeBytes) {
+      return NextResponse.json({ error: `File size exceeds ${maxFileSizeMb}MB limit` }, { status: 400 })
     }
 
     // 构建目标路径

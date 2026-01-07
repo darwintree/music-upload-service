@@ -2,6 +2,7 @@ export interface EnvironmentConfig {
   UPLOAD_DIR: string
   AUTH_TOKEN: string
   NODE_ENV: 'development' | 'production' | 'test'
+  MAX_FILE_SIZE_MB: number
 }
 
 class EnvironmentManager {
@@ -27,10 +28,17 @@ class EnvironmentManager {
       throw new Error('NODE_ENV must be one of: development, production, test')
     }
 
+    const maxFileSizeMbRaw = process.env.MAX_FILE_SIZE_MB
+    const maxFileSizeMb = maxFileSizeMbRaw ? Number.parseInt(maxFileSizeMbRaw, 10) : 100
+    if (!Number.isFinite(maxFileSizeMb) || maxFileSizeMb <= 0) {
+      throw new Error('MAX_FILE_SIZE_MB must be a positive integer')
+    }
+
     return {
       UPLOAD_DIR: uploadDir,
       AUTH_TOKEN: authToken,
-      NODE_ENV: nodeEnv as 'development' | 'production' | 'test'
+      NODE_ENV: nodeEnv as 'development' | 'production' | 'test',
+      MAX_FILE_SIZE_MB: maxFileSizeMb
     }
   }
 
