@@ -5,6 +5,7 @@ import { env } from "@/lib/env"
 
 // 工作目录配置
 const WORK_DIR = env.get('UPLOAD_DIR')
+const ALLOWED_AUDIO_EXTENSIONS = [".m4a", ".mp3"]
 
 // 路径安全管理工具
 function sanitizePath(inputPath: string): string {
@@ -37,6 +38,11 @@ function isPathSafe(testPath: string): boolean {
   }
 }
 
+function isAllowedAudioFile(fileName: string): boolean {
+  const lowerFileName = fileName.toLowerCase()
+  return ALLOWED_AUDIO_EXTENSIONS.some((extension) => lowerFileName.endsWith(extension))
+}
+
 export async function ensureWorkDir() {
   try {
     await fs.access(WORK_DIR)
@@ -55,7 +61,7 @@ export async function listFiles(folderPath: string): Promise<FileItem[]> {
     const files: FileItem[] = []
 
     for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith(".m4a")) {
+      if (entry.isFile() && isAllowedAudioFile(entry.name)) {
         const filePath = path.join(fullPath, entry.name)
         const stats = await fs.stat(filePath)
 
@@ -93,7 +99,7 @@ export async function getFolderStructure(): Promise<FolderStructure[]> {
       if (entry.isDirectory()) {
         const childStructure = await buildStructure(fullPath, entryRelativePath)
         children.push(childStructure)
-      } else if (entry.isFile() && entry.name.endsWith(".m4a")) {
+      } else if (entry.isFile() && isAllowedAudioFile(entry.name)) {
         const stats = await fs.stat(fullPath)
         files.push({
           id: Buffer.from(entryRelativePath).toString("base64"),
