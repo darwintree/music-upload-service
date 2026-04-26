@@ -23,9 +23,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
-    // 验证文件类型 - 只接受 .m4a 文件 (FLAC文件会在前端转码为 .m4a)
-    if (!file.name.toLowerCase().endsWith(".m4a")) {
-      return NextResponse.json({ error: "Only .m4a files are allowed (FLAC files will be transcoded to .m4a in browser)" }, { status: 400 })
+    // 验证文件类型 - 只接受 .m4a 和 .mp3 文件
+    const lowerFileName = file.name.toLowerCase()
+    if (!lowerFileName.endsWith(".m4a") && !lowerFileName.endsWith(".mp3")) {
+      return NextResponse.json({ error: "Only .m4a and .mp3 files are allowed" }, { status: 400 })
     }
 
     const maxFileSizeMb = env.get("MAX_FILE_SIZE_MB")

@@ -13,7 +13,7 @@ export function usePolling(
   { interval, enabled, immediate = true }: UsePollingOptions,
 ) {
   const callbackRef = useRef(callback)
-  const intervalRef = useRef<NodeJS.Timeout>()
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 更新回调引用
   useEffect(() => {
@@ -37,7 +37,7 @@ export function usePolling(
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
-      intervalRef.current = undefined
+      intervalRef.current = null
     }
   }, [])
 

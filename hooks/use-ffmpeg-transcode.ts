@@ -47,8 +47,8 @@ export function useFFmpegTranscode() {
     }
   }, [])
 
-  const transcodeLosslessToAac = useCallback(async (
-    losslessFile: File, 
+  const transcodeToAac = useCallback(async (
+    audioFile: File,
     options: TranscodeOptions = {}
   ): Promise<TranscodeResult> => {
     const { onProgress, onError } = options
@@ -63,12 +63,12 @@ export function useFFmpegTranscode() {
         return { success: false, error }
       }
 
-      const inputExtension = '.' + losslessFile.name.split('.').pop()?.toLowerCase()
+      const inputExtension = '.' + audioFile.name.split('.').pop()?.toLowerCase()
       const inputFileName = `input_${Date.now()}${inputExtension}`
       const outputFileName = `output_${Date.now()}.m4a`
 
       // Write input file to FFmpeg's virtual file system
-      await ffmpeg.writeFile(inputFileName, await fetchFile(losslessFile))
+      await ffmpeg.writeFile(inputFileName, await fetchFile(audioFile))
 
       // Set up progress listener
       ffmpeg.on('progress', ({ progress, time }) => {
@@ -76,7 +76,7 @@ export function useFFmpegTranscode() {
         onProgress?.(progressPercent, time)
       })
 
-      // Transcode FLAC to AAC
+      // Transcode audio to AAC
       await ffmpeg.exec([
         '-i', inputFileName,
         '-c:a', 'aac',
@@ -92,8 +92,9 @@ export function useFFmpegTranscode() {
       const outputData = await ffmpeg.readFile(outputFileName)
       
       // Convert to File object
-      const outputBlob = new Blob([outputData], { type: 'audio/mp4' })
-      const outputFile = new File([outputBlob], losslessFile.name.replace(/\.[^/.]+$/, '.m4a'), {
+      const outputBlobPart = typeof outputData === 'string' ? outputData : new Uint8Array(outputData)
+      const outputBlob = new Blob([outputBlobPart], { type: 'audio/mp4' })
+      const outputFile = new File([outputBlob], audioFile.name.replace(/\.[^/.]+$/, '.m4a'), {
         type: 'audio/mp4'
       })
 
@@ -124,7 +125,7 @@ export function useFFmpegTranscode() {
 
   return {
     loadFFmpeg,
-    transcodeLosslessToAac,
+    transcodeToAac,
     isLosslessFile,
     getTranscodeFileName,
     isLoading,
